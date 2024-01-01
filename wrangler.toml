@@ -2,13 +2,13 @@ name = "telegram-r2"
 main = "src/index.js"
 compatibility_date = "2023-12-18"
 
-account_id = <your aaccount_id>
+account_id = "<your account id"
 workers_dev = true
 # Variable bindings. These are arbitrary, plaintext strings (similar to environment variables)
 # Note: Use secrets to store sensitive data.
 # Docs: https://developers.cloudflare.com/workers/platform/environment-variables
-# [vars]
-# MY_VARIABLE = "production_value"
+[vars]
+DOMAIN_NAME = "<your r2 domain name>"
 
 # Bind a KV Namespace. Use KV as persistent storage for small key-value pairs.
 # Docs: https://developers.cloudflare.com/workers/runtime-apis/kv
@@ -21,6 +21,7 @@ workers_dev = true
 [[r2_buckets]]
 binding = "images"
 bucket_name = "images"
+preview_bucket_name = "images"
 
 # Bind a Queue producer. Use this binding to schedule an arbitrary task that may be processed later by a Queue consumer.
 # Docs: https://developers.cloudflare.com/queues/get-started
