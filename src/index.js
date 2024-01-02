@@ -28,7 +28,6 @@ async function tgPutFile(fileId,chatId,messageId) {
 	var ext = url.pathname.split(".").pop();
 	var fileName = `${crypto.randomUUID()}.${ext}`;
 	var response = await fetch(path);
-	await env.images.put(fileName,response.body)
 	await fetch(`https://api.telegram.org/bot${env.TELEGRAM_BOT_TOKEN}/sendmessage`,
 		{
 			"method": "POST",
@@ -43,16 +42,43 @@ async function tgPutFile(fileId,chatId,messageId) {
 					"message_id": messageId
 				}
 			})
-		});
+		}
+	);
+	await env.images.put(fileName,response.body)
 }
 
-async function tgDeleteFile(request,ctx,fileId,chatId,messageId) {
-	
+async function tgDeleteFile(replyText,replyChatId,replyMessageId,replyUserId) {
+	if (replyUserId != env.BOT_ID) {
+		return;
+	}
+	try {
+		var url = new URL(replyText);
+	}
+	catch (e) {
+		return;
+	}
+	if (url.origin === env.DOMAIN_NAME) {
+		await fetch(`https://api.telegram.org/bot${env.TELEGRAM_BOT_TOKEN}/editmessagetext`,
+			{
+				"method": "POST",
+				"headers": {
+					"Content-Type": "application/json"
+				},
+				"body": JSON.stringify({
+					"chat_id": replyChatId,
+					"message_id": replyMessageId,
+					"text": "_deleted_",
+					"parse_mode": "markdownv2"
+				})
+			}
+		);
+		await env.images.delete(url.pathname.substring(1));
+	}
 }
 
 router.post("/telegram", async(request,ctx) => {
 	if (request.headers.get("X-Telegram-Bot-Api-Secret-Token") !== env.TELEGRAM_VERIFY_TOKEN) {
-		return new Response("Wrong token.", {
+		return new Response("Forbidden.", {
 			"status": 403
 		});
 	}
@@ -63,6 +89,24 @@ router.post("/telegram", async(request,ctx) => {
 		});
 	}
 	var requestJson = await request.json();
+	var text = requestJson["message"]["text"];
+	if (text === "/delete") {
+		var replyToMessageJson = requestJson["message"]["reply_to_message"];
+		if (replyToMessageJson) {
+			var replyUserId = replyToMessageJson["from"]["id"];
+			var replyChatId = replyToMessageJson["chat"]["id"];
+			var replyMessageId = replyToMessageJson["message_id"];
+			var replyText = replyToMessageJson["text"];
+			ctx.waitUntil(tgDeleteFile(
+				replyText,
+				replyChatId,
+				replyMessageId,
+				replyUserId
+			));
+		}
+		return new Response("");
+	}
+
 
 	var userId = requestJson["message"]["from"]["id"];
 	var chatId = requestJson["message"]["chat"]["id"];
