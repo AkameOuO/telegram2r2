@@ -40,6 +40,14 @@ async function tgPutFile(fileId,chatId,messageId) {
 				"parse_mode": "markdown",
 				"reply_parameters": {
 					"message_id": messageId
+				},
+				"reply_markup": {
+					"inline_keyboard": [[
+						{
+							"text": "delete",
+							"callback_data": "/delete"
+						}
+					]]
 				}
 			})
 		}
@@ -76,6 +84,47 @@ async function tgDeleteFile(replyText,replyChatId,replyMessageId,replyUserId) {
 	}
 }
 
+async function tgCallbackQuery(requestJson) {
+	var data = requestJson["callback_query"]["data"];
+	var cqid = requestJson["callback_query"]["id"];
+	
+	if (data === "/delete") {
+		var replyToMessageJson = requestJson["callback_query"]["message"];
+		if (replyToMessageJson) {
+			var replyUserId = replyToMessageJson["from"]["id"];
+			var replyChatId = replyToMessageJson["chat"]["id"];
+			var replyMessageId = replyToMessageJson["message_id"];
+			var replyText = replyToMessageJson["text"];
+			await tgDeleteFile(
+				replyText,
+				replyChatId,
+				replyMessageId,
+				replyUserId
+			);
+		}
+	}
+	fetch(`https://api.telegram.org/bot${env.TELEGRAM_BOT_TOKEN}/answercallbackquery?callback_query_id=${cqid}&text=deleted`)
+}
+
+async function tgReceiveCommand(requestJson) {
+	var text = requestJson["message"]["text"];
+	if (text === "/delete") {
+		var replyToMessageJson = requestJson["message"]["reply_to_message"];
+		if (replyToMessageJson) {
+			var replyUserId = replyToMessageJson["from"]["id"];
+			var replyChatId = replyToMessageJson["chat"]["id"];
+			var replyMessageId = replyToMessageJson["message_id"];
+			var replyText = replyToMessageJson["text"];
+			await tgDeleteFile(
+				replyText,
+				replyChatId,
+				replyMessageId,
+				replyUserId
+			);
+		}
+	}
+}
+
 router.post("/telegram", async(request,ctx) => {
 	if (request.headers.get("X-Telegram-Bot-Api-Secret-Token") !== env.TELEGRAM_VERIFY_TOKEN) {
 		return new Response("Forbidden.", {
@@ -89,24 +138,15 @@ router.post("/telegram", async(request,ctx) => {
 		});
 	}
 	var requestJson = await request.json();
-	var text = requestJson["message"]["text"];
-	if (text === "/delete") {
-		var replyToMessageJson = requestJson["message"]["reply_to_message"];
-		if (replyToMessageJson) {
-			var replyUserId = replyToMessageJson["from"]["id"];
-			var replyChatId = replyToMessageJson["chat"]["id"];
-			var replyMessageId = replyToMessageJson["message_id"];
-			var replyText = replyToMessageJson["text"];
-			ctx.waitUntil(tgDeleteFile(
-				replyText,
-				replyChatId,
-				replyMessageId,
-				replyUserId
-			));
-		}
+	if("callback_query" in requestJson) {
+		ctx.waitUntil(tgCallbackQuery(requestJson));
 		return new Response("");
 	}
-
+	else if(requestJson["message"]["text"] && requestJson["message"]["text"][0] === "/") {
+		ctx.waitUntil(tgReceiveCommand(requestJson));
+		return new Response("");
+	}
+	
 
 	var userId = requestJson["message"]["from"]["id"];
 	var chatId = requestJson["message"]["chat"]["id"];
@@ -116,7 +156,7 @@ router.post("/telegram", async(request,ctx) => {
 	if (!validUserId(userId)) {
 		return new Response("");
 	}
-	if (doc && doc["mime_type"].includes("image")) {
+	if (doc) {
 		ctx.waitUntil(tgPutFile(
 			doc["file_id"],
 			chatId,
