@@ -46,6 +46,10 @@ async function tgPutFile(fileId,chatId,messageId) {
 						{
 							"text": "delete",
 							"callback_data": "/delete"
+						},
+						{
+							"text": "open url",
+							"url": `${env.DOMAIN_NAME}/${fileName}`
 						}
 					]]
 				}
