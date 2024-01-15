@@ -23,6 +23,25 @@ async function tgPutFile(fileId,chatId,messageId) {
 		`https://api.telegram.org/bot${env.TELEGRAM_BOT_TOKEN}/getfile?file_id=${fileId}`
 	);
 	var j = await res1.json();
+	if(j["ok"] === false) {
+		await fetch(`https://api.telegram.org/bot${env.TELEGRAM_BOT_TOKEN}/sendmessage`,
+			{
+				"method": "POST",
+				"headers": {
+					"Content-Type": "application/json"
+				},
+				"body": JSON.stringify({
+					"chat_id": chatId,
+					"text": j["description"],
+					"reply_parameters": {
+						"message_id": messageId
+					}
+				})
+			}
+		);
+		return;
+	}
+	console.log(j);
 	var path = `https://api.telegram.org/file/bot${env.TELEGRAM_BOT_TOKEN}/${j["result"]["file_path"]}`;
 	var url = new URL(path);
 	var ext = url.pathname.split(".").pop();
@@ -157,6 +176,7 @@ router.post("/telegram", async(request,ctx) => {
 	var messageId = requestJson["message"]["message_id"];
 	var doc = requestJson["message"]["document"];
 	var photo = requestJson["message"]["photo"];
+	var video = requestJson["message"]["video"];
 	if (!validUserId(userId)) {
 		return new Response("");
 	}
@@ -169,6 +189,12 @@ router.post("/telegram", async(request,ctx) => {
 	} else if (photo) {
 		ctx.waitUntil(tgPutFile(
 			photo.pop()["file_id"],
+			chatId,
+			messageId
+		));
+	} else if (video) {
+		ctx.waitUntil(tgPutFile(
+			video["file_id"],
 			chatId,
 			messageId
 		));
