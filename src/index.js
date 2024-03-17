@@ -37,7 +37,25 @@ async function urlPutFile(url, chatId, messageId) {
 		return res.json();
 	});
 	let msgId = msg.result.message_id;
-	let response = await fetch(url);
+	let response;
+	try {
+		response = await fetch(url);
+	} catch (e) {
+		await fetch(`https://api.telegram.org/bot${env.TELEGRAM_BOT_TOKEN}/editmessagetext`,
+			{
+				"method": "POST",
+				"headers": {
+					"Content-Type": "application/json"
+				},
+				"body": JSON.stringify({
+					"chat_id": chatId,
+					"message_id": msgId,
+					"text": `${e.name}: ${e.message}`,
+				})
+			}
+		);
+		return;
+	}
 	if (response.status !== 200 ) {
 		await fetch(`https://api.telegram.org/bot${env.TELEGRAM_BOT_TOKEN}/editmessagetext`,
 			{
@@ -48,13 +66,14 @@ async function urlPutFile(url, chatId, messageId) {
 				"body": JSON.stringify({
 					"chat_id": chatId,
 					"message_id": msgId,
-					"text": `Error: status code ${response.status}\``
+					"text": `Error: status code ${response.status}`
 				})
 			}
 		);
 		return;
 	}
-	let fileName = `${crypto.randomUUID()}`;
+	let ext = (new URL(url)).pathname.split(".").pop();
+	let fileName = `${crypto.randomUUID()}` + (ext.length <= 5 ? `.${ext.toLowerCase()}` : '');
 	await fetch(`https://api.telegram.org/bot${env.TELEGRAM_BOT_TOKEN}/editmessagetext`,
 		{
 			"method": "POST",
@@ -81,7 +100,24 @@ async function urlPutFile(url, chatId, messageId) {
 			})
 		}
 	);
-	await env.images.put(fileName, response.body);
+	try {
+		await env.images.put(fileName, response.body);
+	} catch (e) {
+		await fetch(`https://api.telegram.org/bot${env.TELEGRAM_BOT_TOKEN}/editmessagetext`,
+			{
+				"method": "POST",
+				"headers": {
+					"Content-Type": "application/json"
+				},
+				"body": JSON.stringify({
+					"chat_id": chatId,
+					"message_id": msgId,
+					"text": `${e.name}: ${e.message}`,
+				})
+			}
+		);
+		return;
+	}
 }
 
 async function tgPutFile(fileId, chatId, messageId) {
@@ -130,8 +166,9 @@ async function tgPutFile(fileId, chatId, messageId) {
 	let url = new URL(path);
 	let ext = url.pathname.split(".").pop();
 	let fileName = `${crypto.randomUUID()}.${ext}`;
+	let response;
 	try {
-		let response = await fetch(path);
+		response = await fetch(path);
 	} catch (e) {
 		await fetch(`https://api.telegram.org/bot${env.TELEGRAM_BOT_TOKEN}/editmessagetext`,
 			{
@@ -174,7 +211,24 @@ async function tgPutFile(fileId, chatId, messageId) {
 			})
 		}
 	);
-	await env.images.put(fileName, response.body)
+	try {
+		await env.images.put(fileName, response.body)
+	} catch (e) {
+		await fetch(`https://api.telegram.org/bot${env.TELEGRAM_BOT_TOKEN}/editmessagetext`,
+			{
+				"method": "POST",
+				"headers": {
+					"Content-Type": "application/json"
+				},
+				"body": JSON.stringify({
+					"chat_id": chatId,
+					"message_id": msgId,
+					"text": `${e.name}: ${e.message}`,
+				})
+			}
+		);
+		return;
+	}
 }
 
 async function tgDeleteFile(replyText, replyChatId, replyMessageId, replyUserId) {
@@ -262,22 +316,23 @@ router.post("/telegram", async (request, ctx) => {
 	}
 
 	let requestJson = await request.json();
+	console.log(requestJson);
+	let msg = requestJson.message || requestJson.edited_message || {};
+
 	if ("callback_query" in requestJson) {
 		ctx.waitUntil(tgCallbackQuery(requestJson));
 		return new Response("");
-	} else if (requestJson.message.text && requestJson.message.text[0] === "/") {
+	} else if (msg.text && msg.text[0] === "/") {
 		ctx.waitUntil(tgReceiveCommand(requestJson));
 		return new Response("");
 	}
-
-
-	let userId = requestJson.message.from.id;
-	let chatId = requestJson.message.chat.id;
-	let messageId = requestJson.message.message_id;
-	let doc = requestJson.message.document;
-	let photo = requestJson.message.photo;
-	let video = requestJson.message.video;
-	let text = requestJson.message.text;
+	let userId = msg.from.id;
+	let chatId = msg.chat.id;
+	let messageId = msg.message_id;
+	let doc = msg.document;
+	let photo = msg.photo;
+	let video = msg.video;
+	let text = msg.text;
 	let text_url;
 	try {
 		text_url = new URL(text);
